@@ -1,0 +1,139 @@
+---
+title: "Errors Overview"
+description: "Quick guide to understanding and handling Polymer API errors"
+---
+
+<Warning>
+**Dashboard Impact**: Errored requests will appear as invalid requests on your dashboard and may affect your API usage metrics. Proper error handling is essential for maintaining clean usage statistics.
+</Warning>
+
+Polymer API errors fall into two distinct categories based on when they occur in the request lifecycle:
+
+<CardGroup cols={2}>
+<Card title="Immediate Errors" icon="bolt">
+Requests for unsopported chains errors out immediately.
+</Card>
+<Card title="Processing Errors" icon="clock">
+All other errors are returned after request is submitted and jobID is polled.
+</Card>
+</CardGroup>
+
+## Error Response Formats
+
+<Tabs>
+<Tab title="Immediate Errors">
+
+### Immediate Validation Errors
+
+These errors occur during request validation and return immediately without creating a job:
+
+```json Immediate Error Response icon="x-circle" lines highlight={4-7}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": "error_code",
+    "message": "error_message"
+  }
+}
+```
+
+**Characteristics:**
+- No job ID is created
+- Immediate response (no polling required)
+- Usually indicate invalid parameters or unsupported chains
+
+</Tab>
+
+<Tab title="Processing Errors">
+
+### Processing Errors (Discovered via Polling)
+
+These errors are discovered during proof generation and returned through the polling mechanism:
+
+```json Processing Error Response icon="clock-x" lines highlight={5-8}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "status": "error",
+    "jobID": "job_id",
+    "failureReason": "failure_reason"
+  }
+}
+```
+
+**Characteristics:**
+- Job ID is created successfully
+- Error discovered during processing
+- Requires polling to detect the failure
+
+</Tab>
+</Tabs>
+
+## Common Error Categories
+
+<Steps>
+<Step title="Unsupported Chain Errors">
+
+**Error Type**: Immediate validation error  
+**Trigger**: Invalid or unsupported `chainId` parameter
+
+```json Unsupported Chain Error icon="globe-x" lines highlight={4-6}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "error": {
+    "code": "-32000",
+    "message": "chain ID not supported: 123456789"
+  }
+}
+```
+
+**Solution**: Verify the chain ID against the [supported chains list](/build/supported-chains).
+
+</Step>
+
+<Step title="Future Block Errors">
+
+**Error Type**: Processing error (polling required)  
+**Trigger**: Block number hasn't been mined yet
+
+```json Future Block Error icon="clock" lines highlight={6}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "status": "error",
+    "jobID": 15327,
+    "failureReason": "src block number (21927382) greater than latest block number (21926383)"
+  }
+}
+```
+
+**Solution**: Wait for block confirmation or use a confirmed block number.
+
+</Step>
+
+<Step title="Invalid Log Index Errors">
+
+**Error Type**: Processing error (polling required)  
+**Trigger**: `globalLogIndex` exceeds available logs in the block
+
+```json Invalid Log Index Error icon="list-x" lines highlight={6}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "status": "error",
+    "jobID": 15330,
+    "failureReason": "invalid global log index (999) for block number (21926372) with 15 logs"
+  }
+}
+```
+
+**Solution**: Verify the total log count in the target block and adjust the index accordingly.
+
+</Step>
+</Steps>
+

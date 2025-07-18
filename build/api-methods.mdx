@@ -1,0 +1,168 @@
+---
+title: "Prove API Methods"
+description: "Access Polymer's proving infrastructure through JSON-API endpoints."
+---
+
+
+### 1. Request Log Proof
+
+**Endpoint:** `proof.testnet.polymer.zone`
+
+**Method:** `POST`
+
+#### Request Header
+
+```http Headers icon="header" lines
+Authorization: Bearer <token>
+Content-Type: application/json
+Accept: application/json
+```
+
+#### Request Body
+
+```json Request Proof payload icon="code" lines highlight={6-8}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "polymer_requestProof",
+  "params": [{
+    "srcChainId": 11155420,
+    "srcBlockNumber": 26421705,
+    "globalLogIndex": 15
+  }]
+}
+```
+
+#### Request Parameters
+
+The parameters are now enclosed in a single object (instead of an array of separate values):
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `srcChainId` | _int64_ | Source chain ID where the event occurred |
+| `srcBlockNumber` | _int64_ | Block number on the source chain containing the event |
+| `globalLogIndex` | _int64_ | Index of the log in the block (as per standard API response) |
+
+#### Response Body (Success)
+
+```json Success Response icon="check" lines highlight={4}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": jobID
+}
+```
+
+The response contains a jobID that uniquely identifies your request.
+
+#### Response Fields
+
+| Parameter | Type | Description |
+| --- | --- | --- |
+| `jobID` | _int64_ | The jobID returned by the proof request. |
+
+### 2. Query Proof Status
+
+**Endpoint:** `proof.testnet.polymer.zone`
+
+**Method:** `POST`
+
+#### Request Body
+
+To query the status of a proof job, use the `polymer_queryProof` method:
+
+```json Query Proof Status icon="search" lines
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "polymer_queryProof",
+  "params": ["jobID"]
+}
+```
+
+#### Response Body (Success)
+
+```json Complete Proof Response icon="check-circle" lines highlight={5-6}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "status": "complete",
+    "proof": "base64EncodedProofData..."
+  }
+}
+```
+
+#### Response Fields
+
+| Parameter | Description |
+| -------------------------------- | --------------------------- |
+| `proof` | Base64 encoded bytes payload containing the IAVL proof of the application's log stored in the Polymer Rollup. |
+| `status` | Indicates the current status of the proof (`complete`, `error`, `pending`). |
+
+<Info>
+**Proof Encoding**: Proof bytes are `base64` encoded. Your application must decode and convert to `hex` to pass as call data to the contract on-chain.
+</Info>
+
+## Usage Example
+
+```javascript Complete API Flow icon="javascript" lines highlight={2,6-10,15,34,38,39,43}
+const response = await axios.post(
+  "https://proof.testnet.polymer.zone/",
+  {
+    jsonrpc: "2.0",
+    id: 1,
+    method: "polymer_requestProof",
+    params: [{
+      srcChainId: 11155420,
+      srcBlockNumber: 26421705,
+      globalLogIndex: 15
+    }]
+  },
+  {
+    headers: {
+      Authorization: `Bearer ${apiKey}`,
+      'Content-Type': 'application/json',
+      'Accept': 'application/json'
+    }
+  }
+);
+
+const jobId = response.data.result;
+console.log(`Job ID: ${jobId}`);
+
+// Poll for proof completion
+let proofResponse;
+let attempts = 0;
+const maxAttempts = 30;
+
+while (!proofResponse?.data?.result?.proof && attempts < maxAttempts) {
+  await new Promise(resolve => setTimeout(resolve, 2000)); // Wait 2 seconds
+  
+  proofResponse = await axios.post(
+    "https://proof.testnet.polymer.zone/",
+    {
+      jsonrpc: "2.0",
+      id: 1,
+      method: "polymer_queryProof",
+      params: [jobId]
+    },
+    {
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        'Content-Type': 'application/json'
+      }
+    }
+  );
+  
+  attempts++;
+}
+
+if (proofResponse?.data?.result?.proof) {
+  console.log("Proof generated successfully!");
+  const proof = proofResponse.data.result.proof;
+  // Use proof in your contract call
+} else {
+  console.error("Proof generation timeout or failed");
+}
+```

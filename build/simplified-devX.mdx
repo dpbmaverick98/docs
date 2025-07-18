@@ -1,0 +1,121 @@
+---
+title: "Simplified DevX"
+description: " "
+---
+
+Polymer's cross-chain proof system works in just 4 steps. Here are code snippets showing the complete end-to-end flow using our State Sync example:
+
+**The Flow**: App Emit event (App Contract) → Request proof (Prove API) → Submit to destination (App Contract) → Get validated data (Prover Contract)
+
+<Steps>
+  <Step title="Application emits event">
+    Application emits event as per their custom struct for example ValueSet event emission with both indexed and non-indexed parameters
+  </Step>
+  <Step title="Request proof from API">
+    Demonstrates the API request/polling pattern with actual parameters
+  </Step>
+  <Step title="Submit proof to destination">
+    Shows the single method call i.e validateEvent that takes the proof as input and in called in application's execution flow
+  </Step>
+  <Step title="Validate & extract data">
+    Highlights how the complete event data is extracted along with other validation params like source chain and contract address
+  </Step>
+</Steps>
+
+## 4-Step Process in Action: State Sync Example
+
+<Tabs>
+  <Tab title="Step 1">
+    ```solidity
+    // Application function called by user that emits source event
+    function setValue(string calldata key, bytes calldata value) external {
+        // ... logic ...
+        
+        emit ValueSet(
+            msg.sender,     // indexed (topic)
+            key,           // not indexed (data)
+            value,         // not indexed (data)
+            currentNonce,  // not indexed (data)
+            hashedKey,     // indexed (topic)
+            newVersion     // not indexed (data)
+        );
+    }
+    ```
+  </Tab>
+
+  <Tab title="Step 2">
+    ```javascript
+    // Sending a proof request for a given event
+    const proofRequest = await axios.post(POLYMER_API_URL, {
+        jsonrpc: "2.0",
+        method: "polymer_requestProof",
+        params: [{
+            "srcChainId": 11155420,
+            "srcBlockNumber": 26421705,
+            "globalLogIndex": 15
+        }]
+    });
+
+    // Poll for proof
+    while (!proofResponse?.data?.result?.proof && attempts < maxAttempts) {
+        proofResponse = await axios.post(POLYMER_API_URL, {
+            jsonrpc: "2.0",
+            method: "polymer_queryProof",
+            params: [jobId]
+        });
+    }
+    ```
+  </Tab>
+
+  <Tab title="Step 3">
+    ```solidity
+    function setValueFromSource(bytes calldata proof) external {
+        // Single method call with proof as input
+        (
+            uint32 sourceChainId,
+            address sourceContract,
+            bytes memory topics,
+            bytes memory unindexedData
+        ) = polymerProver.validateEvent(proof);
+        
+        // ... validation logic ...
+    }
+    ```
+  </Tab>
+
+  <Tab title="Step 4">
+    ```solidity
+    // Extract indexed parameters from topics
+    assembly {
+            // Skip first 32 bytes (length prefix of bytes array)
+            let topicsPtr := add(topics, 32)
+            
+            // Load each 32-byte topic into the array
+            // topicsArray structure: [eventSig, sender, hashedKey]
+            for { let i := 0 } lt(i, 3) { i := add(i, 1) } {
+                mstore(
+                    add(add(topicsArray, 32), mul(i, 32)),
+                    mload(add(topicsPtr, mul(i, 32)))
+                )
+            }
+        }
+
+    // Decode non-indexed event parameters
+    (
+            ,                       // skip key (we use hashedKey from topics)
+            bytes memory value,     // actual value to store
+            uint256 nonce,         // used for replay protection
+            uint256 version        // used for version control
+        ) = abi.decode(
+            unindexedData, 
+            (string, bytes, uint256, uint256)
+        );
+
+    // ---- Application follow up logic and execution with event details ----
+    
+    emit ValueUpdated(hashedKey, value, version);
+    ```
+  </Tab>
+</Tabs>
+
+> **Real Impact**: This enables apps to set a key-value pair on Optimism and automatically sync it across multiple chains in seconds, eliminating the need for costly cross-chain messaging.

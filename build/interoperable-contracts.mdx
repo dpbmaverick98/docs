@@ -1,0 +1,59 @@
+---
+title: "Why Devs Choose Polymer"
+description: "Make YOUR existing contracts interoperable"
+---
+
+ With Polymer, we enable the smart contracts you already use to be crosschain—a simpler, more flexible way to build multi-chain applications that puts developers first.
+
+    <Tip>
+    With Polymer, developers can now treat interoperability as a byproduct of execution within their application contracts— not a separate architecture to manage.
+    </Tip>
+
+<Tabs>
+  <Tab title="Traditional Approach">
+    ## Outdated Messaging
+
+    ![image](https://github.com/user-attachments/assets/0c5ea318-be74-4c9d-8f76-392b3097e20a)
+
+    This approach involves:
+
+    - Deploying source and destination contracts for every chain pair.
+    - Integrating bridge-specific logic and OApp/gateway contracts.
+    - Encoding application logic into payloads executed by the bridge.
+    - Managing on-chain fee estimation using external oracles.
+    - Parsing and executing data as dictated by the bridge protocol.
+
+    ### Drawbacks
+
+    - **High engineering cost** — weeks or even months to implement and debug.
+    - **Single-source-to-single-destination limitation** — additional chains require more messages and more gas.
+    - **Infra overhead** — fees estimations by bridges often exceed 10x of execution costs.
+        - LZ typical fee: ~$0.30
+        - HL typical fee: ~$1.0
+    - **Manual reconfiguration** — adding new chains requires bridge updates on all existing instances.
+  </Tab>
+  
+  <Tab title="Polymer Approach">
+    ## Natively Interoperable Apps (Phat Apps)
+
+    ![image](https://github.com/user-attachments/assets/54e41d66-1cb3-46b1-a0b6-accd32b3a7eb)
+
+    - **No contract interfaces needed** — emit standard application events.
+        - Polymer supports **state-level proofs**, which allows proving any emitted event without requiring special contracts on the origin chain.
+    - **Single proof call** — execute your destination logic using `validateEvent` with proof from Prove API.
+        - Polymer e2e latency is close to rollup block times i.e 2-4secs.
+    - **App defined API** — events retain their original format defined by the app developers.
+        - Proof validation is hyper efficient with on-chain gas costs of under a cent.
+    - **Custom logic control** — execute your app-specific validations before processing.
+
+    ### Benefits of interoperable contracts 
+
+    - **Developer simplicity** — build faster, focus on core app logic.
+    - **Broadcast model** — emit once, prove anywhere.
+    - **No cross-chain boilerplate** — no need to re-configure contracts for every new chain.
+    - **Scalability** — as long as your contracts are deterministic, they are future-ready.
+    - **Permissionless Execution** — Anyone can submit a valid proof to trigger execution.
+        - For enterprise security, additional access control layers can be implemented.
+  </Tab>
+</Tabs>
+

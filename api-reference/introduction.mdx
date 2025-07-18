@@ -1,33 +1,263 @@
 ---
-title: 'Introduction'
-description: 'Example section for showcasing API endpoints'
+title: "API Overview"
+description: "Complete guide to Polymer's proof generation and querying API endpoints"
 ---
 
-<Note>
-  If you're not looking to build API reference documentation, you can delete
-  this section by removing the api-reference folder.
-</Note>
+<Info>
+Polymer's API enables developers to request and query cryptographic proofs for cross-chain events, providing secure validation of on-chain activities across different blockchain networks.
+</Info>
 
-## Welcome
+## Getting Started
 
-There are two ways to build API documentation: [OpenAPI](https://mintlify.com/docs/api-playground/openapi/setup) and [MDX components](https://mintlify.com/docs/api-playground/mdx/configuration). For the starter kit, we are using the following OpenAPI specification.
-
-<Card
-  title="Plant Store Endpoints"
-  icon="leaf"
-  href="https://github.com/mintlify/starter/blob/main/api-reference/openapi.json"
->
-  View the OpenAPI specification file
+<CardGroup cols={2}>
+<Card title="Base URL" icon="link">
+`https://proof.testnet.polymer.zone/`
 </Card>
+<Card title="Protocol" icon="code">
+JSON-RPC 2.0 over HTTPS
+</Card>
+</CardGroup>
 
-## Authentication
+<Info>
+**Processing Time**: Proof generation typically takes 2-4 seconds post finality or upto a few mintues if requested early.
+</Info>
 
-All API endpoints are authenticated using Bearer tokens and picked up from the specification file.
+### Authentication
 
-```json
-"security": [
-  {
-    "bearerAuth": []
-  }
-]
+All API requests require authentication using Bearer tokens:
+
+```http Authentication Headers icon="key" lines highlight={1-2}
+Authorization: Bearer <your_api_token>
+Content-Type: application/json
 ```
+
+<Tip>
+Contact the Polymer team to obtain your API Key for access.
+</Tip>
+
+## Core API Methods
+
+<Tabs>
+<Tab title="Request Proof">
+
+### polymer_requestProof
+
+Initiates proof generation for a specific cross-chain event.
+
+```json Request Proof Method icon="play" lines highlight={3-8}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "polymer_requestProof",
+  "params": [{
+    "srcChainId": 11155420,
+    "srcBlockNumber": 26421705,
+    "globalLogIndex": 15
+  }]
+}
+```
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `srcChainId` | `uint32` | Source chain identifier (e.g., 11155420 for Optimism Sepolia) |
+| `srcBlockNumber` | `uint64` | Block number containing the target event |
+| `globalLogIndex` | `uint16` | Global log index within the specified block |
+
+<Tip>
+**Global Log Index**: Use the `globalLogIndex` from standard blockchain API responses when requesting proofs. This ensures accurate event targeting.
+</Tip>
+
+#### Response
+
+```json Job ID Response icon="hash" lines highlight={4}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": 12345
+}
+```
+
+Returns a unique `jobID` for tracking the proof generation status.
+
+</Tab>
+
+<Tab title="Query Proof">
+
+### polymer_queryProof
+
+Retrieves the current status and result of a proof generation job.
+
+```json Query Proof Method icon="search" lines highlight={3-4}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "method": "polymer_queryProof",
+  "params": [12345]
+}
+```
+
+#### Parameters
+
+| Parameter | Type | Description |
+|-----------|------|-------------|
+| `jobID` | `number` | The job identifier returned from `polymer_requestProof` |
+
+#### Response States
+
+<CardGroup cols={3}>
+<Card title="Pending" icon="clock">
+Proof generation in progress
+</Card>
+<Card title="Complete" icon="check">
+Proof successfully generated
+</Card>
+<Card title="Error" icon="x">
+Proof generation failed
+</Card>
+</CardGroup>
+
+```json Complete Response icon="check-circle" lines highlight={5-6}
+{
+  "jsonrpc": "2.0",
+  "id": 1,
+  "result": {
+    "status": "complete",
+    "proof": "base64EncodedProofData..."
+  }
+}
+```
+
+</Tab>
+</Tabs>
+
+## Implementation Guide
+
+<Steps>
+<Step title="Request Proof Generation">
+
+Submit a proof request and receive a job ID:
+
+```javascript Request Implementation icon="play" lines highlight={8-14}
+const proofRequest = await fetch('https://proof.testnet.polymer.zone/', {
+  method: 'POST',
+  headers: {
+    'Authorization': `Bearer ${apiKey}`,
+    'Content-Type': 'application/json'
+  },
+  body: JSON.stringify({
+    jsonrpc: "2.0",
+    id: 1,
+    method: "polymer_requestProof",
+    params: [{
+      srcChainId: 11155420,
+      srcBlockNumber: 26421705,
+      globalLogIndex: 15
+    }]
+  })
+});
+
+const { result: jobId } = await proofRequest.json();
+```
+
+</Step>
+
+<Step title="Poll for Completion">
+
+Implement polling logic to check proof status:
+
+```javascript Polling Implementation icon="refresh" lines highlight={8-15}
+const pollProof = async (jobId) => {
+  const response = await fetch('https://proof.testnet.polymer.zone/', {
+    method: 'POST',
+    headers: {
+      'Authorization': `Bearer ${apiKey}`,
+      'Content-Type': 'application/json'
+    },
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "polymer_queryProof",
+      params: [jobId]
+    })
+  });
+  
+  const { result } = await response.json();
+  return result;
+};
+```
+
+</Step>
+
+<Step title="Handle Proof Result">
+
+Process the completed proof with proper error handling:
+
+```javascript Complete Flow icon="check-circle" lines highlight={2-12}
+// Poll every 2 seconds until completion
+const getProof = async (jobId) => {
+  return new Promise((resolve, reject) => {
+    const interval = setInterval(async () => {
+      try {
+        const result = await pollProof(jobId);
+        
+        if (result.status === 'complete') {
+          clearInterval(interval);
+          resolve(result.proof);
+        } else if (result.status === 'error') {
+          clearInterval(interval);
+          reject(new Error('Proof generation failed'));
+        }
+        // Continue polling if status is 'pending'
+      } catch (error) {
+        clearInterval(interval);
+        reject(error);
+      }
+    }, 2000);
+  });
+};
+
+// Usage
+const proof = await getProof(jobId);
+```
+
+</Step>
+</Steps>
+
+## Important Considerations
+
+<Warning>
+**Proof Format**: Proof data is returned as base64 encoded. You must decode it to hexadecimal format before using it in smart contract calls.
+</Warning>
+
+### Data Processing
+
+```javascript Proof Processing icon="gear" lines highlight={1-2,5-6}
+// Decode base64 proof to hex for contract use
+const hexProof = '0x' + Buffer.from(base64Proof, 'base64').toString('hex');
+
+// Use in contract call
+const result = await contract.validateEvent(hexProof);
+```
+
+### Best Practices
+
+<CardGroup cols={2}>
+<Card title="Polling Frequency" icon="clock">
+Poll every 2-5 seconds to balance responsiveness with API load
+</Card>
+<Card title="Timeout Handling" icon="timer">
+Implement timeout logic for long-running proof generation
+</Card>
+<Card title="Error Handling" icon="exclamation">
+Handle network failures and retry logic gracefully
+</Card>
+<Card title="Status Monitoring" icon="chart-line">
+Monitor all three status states: pending, complete, error
+</Card>
+</CardGroup>
+
+
+
+
